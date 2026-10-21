@@ -88,8 +88,8 @@ function apiSearch(params) {
   let res = readIndex_();
   if (params.number) {
     const n = Number(params.number);
-    // ค้นได้ทั้งเลขตามลำดับบัญชีคุม และเลขเดิมในเอกสาร PDF
-    res = res.filter(r => r.number === n || r.docNumber === n);
+    // ช่องค้นหมายเลขแสดงเฉพาะเลขที่ยืนยันจากบัญชีคุม
+    res = res.filter(r => r.number === n);
   }
   if (params.category) {
     res = res.filter(r => r.category === params.category);
@@ -100,6 +100,11 @@ function apiSearch(params) {
       [r.name, r.owner_unit, r.project, r.category, r.subtags, r.summary, r.search, r.code, String(r.number), String(r.docNumber)]
         .join(' ').toLowerCase().indexOf(q) >= 0);
   }
+  const textCmp = (a, b) => String(a || '').localeCompare(String(b || ''), 'th');
+  if (params.sort === 'name') res.sort((a, b) => textCmp(a.name, b.name));
+  else if (params.sort === 'unit') res.sort((a, b) => textCmp(a.owner_unit, b.owner_unit) || textCmp(a.name, b.name));
+  else if (params.sort === 'cat') res.sort((a, b) => textCmp(a.category, b.category) || textCmp(a.name, b.name));
+  else res.sort((a, b) => ((a.number || 1e9) - (b.number || 1e9)) || textCmp(a.code, b.code) || textCmp(a.name, b.name));
   const LIMIT = 300;
   // คืน total ด้วย เพื่อให้ฝั่งเว็บรู้ว่าผลถูกตัด (ไม่โชว์จำนวนที่ตัดแล้วว่าเป็นทั้งหมด)
   return { items: res.slice(0, LIMIT), total: res.length };
@@ -152,8 +157,8 @@ function readIndex_() {
     const r = v[i];
     if (!r[0] && !r[2]) continue; // ข้ามแถวว่าง (ไม่มีทั้งเลขและชื่อ)
     out.push({
-      code: r[0],                                                 // "ส-001" ตามบัญชีคุม
-      number: parseInt(String(r[0]).split('/')[0].replace(/[^0-9]/g, ''), 10) || null, // เลขจริงสำหรับค้น/เรียง (ตัด /ปีงบ ออกก่อน)
+      code: r[0],                                                 // ว่างเมื่อยังยืนยันเลขไม่ได้
+      number: r[0] ? equipmentNumber_(r[0]) : null,
       docNumber: Number(r[1]) || null,                            // เลขที่ OCR อ่านได้
       name: r[2], unit: r[3], category: r[4], subtags: r[5],
       owner_unit: r[6], file: r[7], url: r[8], projectRow: r[9], project: r[10],
