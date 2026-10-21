@@ -17,6 +17,32 @@ node --test tests/index.test.cjs
 
 ## อัปเดตระบบจริง
 
+หากทำงานบน Windows ให้ใช้ **PowerShell** สำหรับ `clasp` และเข้าสู่ระบบ Google
+ด้วยบัญชีที่แก้ไขโปรเจกต์ Apps Script ได้:
+
+```powershell
+npm install --global @google/clasp
+clasp login
+```
+
+ก่อนส่งโค้ดขึ้นระบบจริง ให้ `clasp clone` โปรเจกต์ที่ใช้งานอยู่ลงในโฟลเดอร์ใหม่
+เพื่อสำรองและตรวจไฟล์ฝั่ง Google ก่อนเสมอ:
+
+```powershell
+$scriptId = '1RvINzBsOibTkW9hrRpEPvcbDKQz4Gg5zUi10hfmO4Lkbi_XdXV3uZOEe'
+$remoteDir = Join-Path $env:TEMP ('inventory-apps-script-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Force $remoteDir | Out-Null
+Set-Location $remoteDir
+clasp clone $scriptId
+clasp status
+```
+
+ตรวจความต่างกับไฟล์ใน repository ก่อนคัดลอก `Code.gs`, `Config.gs`,
+`Index.gs`, `OpenRouter.gs`, `WebApp.html` และ `appsscript.json` ไปยังโฟลเดอร์
+ที่ clone แล้วสั่ง `clasp push` จากโฟลเดอร์นั้น การ clone ไว้ก่อนช่วยเก็บไฟล์
+อื่นที่มีอยู่ในโปรเจกต์จริง หลัง push ให้ทำตามขั้นตอนด้านล่างเพื่อสร้างดัชนี
+และอัปเดต deployment
+
 1. นำไฟล์ `.gs`, `WebApp.html` และ `appsscript.json` ไปยังโปรเจกต์ Apps Script
    ที่ใช้งานอยู่ โปรเจกต์นี้ยังไม่มี `.clasp.json` สำหรับซิงก์อัตโนมัติ
 2. ตรวจ `SPREADSHEET_ID` และ `FOLDER_ID` ใน `Config.gs` และตั้ง
