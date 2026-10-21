@@ -36,8 +36,8 @@
   /* ---------- Top bar ---------- */
   .top{position:sticky; top:0; z-index:20; background:color-mix(in srgb,var(--bg) 88%, transparent);
     backdrop-filter:blur(10px); border-bottom:1px solid var(--line);}
-  .top .inner{max-width:920px; margin:0 auto; padding:14px 18px;}
-  .brand{display:flex; align-items:center; gap:10px; margin-bottom:12px;}
+  .top .inner{max-width:1320px; margin:0 auto; padding:14px 18px;}
+  .brand{display:flex; align-items:center; gap:10px;}
   .logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--acc),#7c3aed);
     display:grid;place-items:center;color:#fff;font-size:18px;box-shadow:var(--shadow)}
   .brand h1{font-size:18px; margin:0; font-weight:700; letter-spacing:.2px}
@@ -58,7 +58,7 @@
   .clear:hover{color:var(--txt)}
 
   /* ---------- Category dropdown ---------- */
-  .filters{padding-top:12px}
+  .filters{margin-top:18px}
   .selectwrap{position:relative; display:flex; align-items:center; width:100%}
   .fsel{appearance:none; -webkit-appearance:none; width:100%; font-family:inherit; font-size:14.5px;
     color:var(--txt); background:var(--panel); border:1.5px solid var(--line); border-radius:12px;
@@ -69,7 +69,18 @@
   .selectwrap .chev{position:absolute; right:14px; width:16px;height:16px; color:var(--faint); pointer-events:none}
 
   /* ---------- Body ---------- */
-  .wrap{max-width:920px; margin:0 auto; padding:16px 18px 80px}
+  .wrap{max-width:1320px; margin:0 auto; padding:22px 18px 80px}
+  .layout{display:grid; grid-template-columns:minmax(0,1fr); gap:20px; align-items:start}
+  .aside{background:var(--panel); border:1px solid var(--line); border-radius:16px;
+    box-shadow:var(--shadow); padding:18px; min-width:0}
+  .aside h2{font-size:16px; margin:0 0 15px}
+  .field-label{display:block; color:var(--mut); font-size:13px; font-weight:600; margin:0 0 8px}
+  .aside-note{color:var(--mut); font-size:12px; margin:14px 0 0}
+  .main{min-width:0}
+  @media(min-width:960px){
+    .layout{grid-template-columns:270px minmax(0,1fr)}
+    .aside{position:sticky; top:90px}
+  }
   .bar{display:flex; align-items:center; justify-content:space-between; gap:10px; margin:8px 2px 14px; flex-wrap:wrap}
   .count{color:var(--mut); font-size:13px}
   .count b{color:var(--txt)}
@@ -78,13 +89,14 @@
 
   /* ---------- Cards ---------- */
   .grid{display:grid; grid-template-columns:1fr; gap:12px}
-  @media(min-width:680px){.grid{grid-template-columns:1fr 1fr}}
+  @media(min-width:1200px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   .card{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:15px 16px;
     box-shadow:var(--shadow); display:flex; flex-direction:column; transition:transform .12s, border-color .12s}
   .card:hover{transform:translateY(-2px); border-color:var(--acc)}
   .chead{display:flex; align-items:flex-start; gap:10px}
   .num{flex:none; min-width:38px; height:38px; padding:0 8px; border-radius:10px; background:var(--acc-weak);
     color:var(--acc); font-weight:700; font-family:'IBM Plex Mono',monospace; display:grid; place-items:center; font-size:15px}
+  .num.pending{font-family:inherit; font-size:11px; color:var(--mut); background:var(--panel2)}
   .titles{flex:1; min-width:0}
   .name{font-weight:700; font-size:16px; word-break:break-word}
   .tag{display:inline-block; margin-top:4px; font-size:11.5px; padding:2px 9px; border-radius:999px;
@@ -122,38 +134,49 @@
         <div class="sub" id="stats">กำลังโหลด…</div>
       </div>
     </div>
-    <div class="search">
-      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-      <input id="q" autocomplete="off" placeholder="ค้นด้วยหมายเลข / ชื่ออุปกรณ์ / หน่วย / โครงการ / หมวดหมู่ …">
-      <button class="clear" id="clear" title="ล้าง">✕</button>
-    </div>
-    <div class="filters">
-      <div class="selectwrap">
-        <svg class="lic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-        <select id="cat" class="fsel"><option value="">ทุกหมวดหมู่</option></select>
-        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-      </div>
-    </div>
   </div>
 </div>
 
 <div class="wrap">
-  <div class="bar">
-    <div class="count" id="count"></div>
-    <select class="sort" id="sort">
-      <option value="num">เรียงตามหมายเลข</option>
-      <option value="name">เรียงตามชื่อ</option>
-      <option value="unit">เรียงตามหน่วย</option>
-      <option value="cat">เรียงตามหมวดหมู่</option>
-    </select>
+  <div class="layout">
+    <aside class="aside" aria-label="ค้นหาและกรองข้อมูล">
+      <h2>ค้นหาและกรอง</h2>
+      <label class="field-label" for="q">คำค้นหรือเลขอุปกรณ์</label>
+      <div class="search">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="q" autocomplete="off" placeholder="เลข / ชื่อ / หน่วย / โครงการ">
+        <button class="clear" id="clear" type="button" aria-label="ล้างคำค้น" title="ล้าง">✕</button>
+      </div>
+      <div class="filters">
+        <label class="field-label" for="cat">หมวดหมู่</label>
+        <div class="selectwrap">
+          <svg class="lic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          <select id="cat" class="fsel"><option value="">ทุกหมวดหมู่</option></select>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+      </div>
+      <p class="aside-note">เลขบนการ์ดอ้างอิงจากบัญชีคุมเท่านั้น รายการที่ยังจับคู่ไม่ได้จะแสดงให้ตรวจสอบ</p>
+    </aside>
+    <main class="main">
+      <div class="bar">
+        <div class="count" id="count"></div>
+        <select class="sort" id="sort" aria-label="เรียงผลลัพธ์">
+          <option value="num">เรียงตามหมายเลข</option>
+          <option value="name">เรียงตามชื่อ</option>
+          <option value="unit">เรียงตามหน่วย</option>
+          <option value="cat">เรียงตามหมวดหมู่</option>
+        </select>
+      </div>
+      <div id="results"></div>
+    </main>
   </div>
-  <div id="results"></div>
 </div>
 
 <script>
   var CAT='', SORT='num', TIMER=null, SEQ=0;
 
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function safeUrl(s){return /^https:\/\//i.test(String(s||'')) ? esc(s) : '';}
   function hl(s,q){ s=esc(s); if(!q) return s;
     try{var re=new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','ig'); return s.replace(re,'<mark>$1</mark>');}catch(e){return s;}
   }
@@ -191,7 +214,7 @@
   /* ---------- search ---------- */
   function currentParams(){
     var q=document.getElementById('q').value.trim();
-    var p={q:q, category:CAT};
+    var p={q:q, category:CAT, sort:SORT};
     if(/^\d+$/.test(q)){ p.number=q; p.q=''; }
     return p;
   }
@@ -210,15 +233,6 @@
     }).withFailureHandler(function(err){ if(my!==SEQ) return; showError(err); }).apiSearch(p);
   }
 
-  function sortList(list){
-    var a=list.slice();
-    if(SORT==='num') a.sort(function(x,y){return (x.number||1e9)-(y.number||1e9);});
-    else if(SORT==='name') a.sort(function(x,y){return String(x.name).localeCompare(String(y.name),'th');});
-    else if(SORT==='unit') a.sort(function(x,y){return String(x.owner_unit).localeCompare(String(y.owner_unit),'th');});
-    else if(SORT==='cat') a.sort(function(x,y){return String(x.category).localeCompare(String(y.category),'th');});
-    return a;
-  }
-
   function render(list, total, q){
     if(total==null) total=(list?list.length:0);
     var cnt=document.getElementById('count');
@@ -232,24 +246,25 @@
       ? ('พบ <b>'+total+'</b> รายการ (แสดง '+list.length+' รายการแรก — ค้นให้แคบลงเพื่อดูทั้งหมด)')
       : ('พบ <b>'+list.length+'</b> รายการ');
     var html='<div class="grid">';
-    sortList(list).forEach(function(r){
+    list.forEach(function(r){
       html+='<div class="card">'+
         '<div class="chead">'+
-          '<div class="num">'+esc(r.code||r.number)+'</div>'+
+          '<div class="num'+(r.code?'':' pending')+'">'+esc(r.code||'รอตรวจสอบเลข')+'</div>'+
           '<div class="titles">'+
             '<div class="name">'+hl(r.name,q)+'</div>'+
             '<span class="tag">'+esc(r.category)+'</span>'+
           '</div>'+
         '</div>'+
         '<div class="meta">'+
-          (r.docNumber && r.docNumber!==r.number?'<span class="kv" style="color:#d97706"><b>OCR อ่านเลข:</b> '+esc(r.docNumber)+' (ต่างจากบัญชีคุม)</span>':'')+
+          (r.docNumber && !r.code?'<span class="kv" style="color:#d97706"><b>เลขจาก OCR:</b> '+esc(r.docNumber)+' (ยังไม่ยืนยัน)</span>':'')+
+          (r.docNumber && r.code && r.docNumber!==r.number?'<span class="kv" style="color:#d97706"><b>เลขจาก OCR:</b> '+esc(r.docNumber)+' (ต่างจากบัญชีคุม)</span>':'')+
           (r.owner_unit||r.unit?'<span class="kv"><b>หน่วยเจ้าของ:</b> '+hl(r.owner_unit,q)+(r.unit?' • '+esc(r.unit):'')+'</span>':'')+
           (r.project?'<span class="kv"><b>โครงการ:</b> '+hl(r.project,q)+'</span>':'')+
           (r.status?'<span class="kv"><b>สถานะ:</b> <span class="pill" style="background:'+statusColor(r.status)+'">'+esc(r.status)+'</span></span>':'')+
         '</div>'+
         (r.summary?'<div class="summary">'+hl(r.summary,q)+'</div>':'')+
         '<div class="foot">'+
-          (r.url?'<a class="btn" href="'+esc(r.url)+'" target="_blank">📄 เปิดไฟล์ PDF</a>':'')+
+          (safeUrl(r.url)?'<a class="btn" href="'+safeUrl(r.url)+'" target="_blank" rel="noopener noreferrer">📄 เปิดไฟล์ PDF</a>':'')+
         '</div>'+
       '</div>';
     });

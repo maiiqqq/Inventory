@@ -8,6 +8,7 @@ function buildIndex() {
 
   const files = listPdfFiles_();
   const { sh: cacheSh, map: cache } = loadCache_();
+  const liveIds = new Set(files.map(f => f.id));
   const t0 = Date.now();
   let processed = 0, skipped = 0, remaining = 0, failed = 0;
 
@@ -24,6 +25,12 @@ function buildIndex() {
       notify_('ผิดพลาดไฟล์ ' + f.name + ': ' + e.message);
     }
   }
+
+  // ไฟล์ที่ถูกลบหรือย้ายออกจากโฟลเดอร์ต้องไม่ค้างอยู่ในดัชนี
+  Object.keys(cache).filter(id => !liveIds.has(id))
+    .map(id => ({ id, row: cache[id].rowIndex }))
+    .sort((a, b) => b.row - a.row)
+    .forEach(entry => { cacheSh.deleteRow(entry.row); delete cache[entry.id]; });
 
   rebuildIndexSheet_(cache);
 
@@ -63,6 +70,16 @@ function listPdfFiles_() {
 function loadCache_() {
   const sh = getOrCreateSheet_(CONFIG.CACHE_SHEET, ['fileId', 'modifiedTime', 'fileName', 'url', 'folder', 'json']);
   const data = sh.getDataRange().getValues();
+  const lastRowById = {};
+  for (let i = 1; i < data.length; i++) if (data[i][0]) lastRowById[data[i][0]] = i + 1;
+  const duplicateRows = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] && lastRowById[data[i][0]] !== i + 1) duplicateRows.push(i + 1);
+  }
+  if (duplicateRows.length) {
+    duplicateRows.reverse().forEach(row => sh.deleteRow(row));
+    return loadCache_(); // อ่านเลขแถวใหม่หลังลบแถวเก่า
+  }
   const map = {};
   for (let i = 1; i < data.length; i++) {
     const r = data[i];
@@ -98,29 +115,47 @@ function rebuildIndexSheet_(cache) {
   const control = readControlSheet_(); // สถานะโครงการ (สถานะ/วงเงิน)
   const ledger = readLedger_();        // บัญชีคุม (เลขอุปกรณ์ทางการ)
 
-  const items = [];
-  Object.keys(cache).forEach(fid => {
+  const unique = new Map();
+  Object.keys(cache).sort().forEach(fid => {
     const c = cache[fid];
     const list = c.items || [];
     if (!list.length) return;
     const range = parseRange_(c.fileName); // ช่วงเลขจากชื่อไฟล์ (อาจเป็น [null,null])
     list.forEach(it => {
-      const led = ledger.matchName(it.name, range);            // แถวบัญชีคุมที่ตรงชื่อที่สุด
+      const led = ledger.matchItem(it, range);                // ไม่เดาเลขเมื่อมีหลายแถวที่คล้ายกัน
       const proj = (led && led.project) || it.project || '';
       const unit = it.owner_unit || (led && led.unit) || '';
       const link = control.matchProject(proj, unit);           // สถานะ/วงเงิน จากสถานะโครงการ
-      items.push({
-        number: led ? led.number : (Number(it.number) || null), // ไว้เรียง/ค้น
-        code:   led ? (led.code + (led.year ? '/' + led.year : '')) : (it.number != null ? String(it.number) : ''), // แสดง "ส-001/69"
+      const item = {
+        number: led ? led.number : null, // เลข OCR ไม่ใช่เลขทางการ
+        code: led ? led.fullCode : '',
         ocrNumber: it.number,
         name: it.name, unitCount: it.unit, category: it.category,
         subtags: (it.subtags || []).join(', '), owner_unit: unit,
         fileName: c.fileName, url: c.url,
         projRow: link.row || '', project: proj || link.project || '', status: link.status || '', budget: link.budget || '',
         summary: it.summary, rawText: it.rawText || ''
-      });
+      };
+      // รายการเดียวกันอาจถูกอ่านซ้ำจาก PDF หลายไฟล์หรือซ้ำภายในไฟล์เดียว
+      const nameKey = norm_(it.name);
+      const projectKey = norm_(proj);
+      const ownerKey = norm_(unit);
+      const folderKey = norm_(c.folder);
+      const docNumber = Number(it.number) || 0;
+      let key = led
+        ? 'ledger:' + led.fullCode
+        : 'ocr:' + folderKey + ':' + nameKey + ':' + projectKey + ':' + ownerKey + ':' + docNumber + (docNumber ? '' : ':' + fid);
+      // ชื่อต่างกันมากแต่ถูกจับเข้ากับเลขเดียวกัน: เก็บไว้ให้ตรวจแทนการทิ้งเงียบ ๆ
+      if (led && unique.has(key) && simNorm_(unique.get(key).name, it.name) < 0.9) {
+        item.number = null;
+        item.code = '';
+        key = 'ocr:' + folderKey + ':' + nameKey + ':' + projectKey + ':' + ownerKey + ':' + docNumber + ':' + fid;
+      }
+      const previous = unique.get(key);
+      if (!previous || itemQuality_(item) > itemQuality_(previous)) unique.set(key, item);
     });
   });
+  const items = Array.from(unique.values());
 
   // เรียงตามเลขบัญชีคุม (รายการที่จับคู่ไม่ได้ไปอยู่ท้ายสุด)
   items.sort((a, b) => ((a.number || 1e9) - (b.number || 1e9)) || String(a.name).localeCompare(String(b.name), 'th'));
@@ -144,12 +179,26 @@ function rebuildIndexSheet_(cache) {
   sh.hideColumns(15); // ซ่อนคอลัมน์ "ข้อความค้นหา" (คอลัมน์ที่ 15)
 }
 
+function itemQuality_(it) {
+  return (it.number && it.ocrNumber === it.number ? 1000 : 0) +
+    String(it.summary || '').length + String(it.subtags || '').length +
+    String(it.rawText || '').length + (it.url ? 10 : 0);
+}
+
 /* ถอดช่วงหมายเลขจากชื่อไฟล์ เช่น "100-103.pdf" → [100,103], "7.pdf" → [7,7] */
 function parseRange_(fileName) {
   const m = String(fileName || '').match(/^(\d+)(?:\s*-\s*(\d+))?\.pdf$/i);
   if (!m) return [null, null];
   const s = Number(m[1]);
   return [s, m[2] ? Number(m[2]) : s];
+}
+
+/** อ่านเลขจากค่าจริงหรือรูปแบบแสดงผล เช่น 1, "001", "ส-001/69" */
+function equipmentNumber_(value) {
+  if (typeof value === 'number') return Number.isInteger(value) && value > 0 ? value : null;
+  const text = String(value == null ? '' : value).trim();
+  const m = text.match(/(?:^|[^0-9])0*(\d+)(?:\/\d+)?$/);
+  return m && Number(m[1]) > 0 ? Number(m[1]) : null;
 }
 
 /* ---------- อ่านบัญชีคุม (ทะเบียนเลขอุปกรณ์ทางการ) + ฟังก์ชันจับคู่ตามชื่อ ---------- */
@@ -176,40 +225,44 @@ function readLedger_() {
     const name = String(values[i][cName] || '').trim();
     const numRaw = values[i][cNum];
     if (!name && (numRaw === '' || numRaw == null)) continue;
+    const number = equipmentNumber_(numRaw) || equipmentNumber_(display[i][cNum]);
+    if (!name || !number) continue; // แถวไม่ครบยังใช้ยืนยันเลขไม่ได้
+    const code = String(display[i][cNum] || numRaw).trim();
+    const year = cYear >= 0 ? String(values[i][cYear] || '').trim() : '';
     rows.push({
-      number: Number(numRaw) || null,
-      code: cNum >= 0 ? String(display[i][cNum] || '').trim() : String(Number(numRaw) || ''), // "ส-001"
+      number,
+      code,
+      fullCode: year && !code.endsWith('/' + year) ? code + '/' + year : code,
       name: name,
       nkey: norm_(name),
       project: cProj >= 0 ? String(values[i][cProj] || '').trim() : '',
       unit: cUnit >= 0 ? String(values[i][cUnit] || '').trim() : '',
-      year: cYear >= 0 ? String(values[i][cYear] || '').trim() : ''
+      year
     });
   }
 
   return {
     rows,
-    /** จับคู่ชื่อ → แถวบัญชีคุม; ถ้ามี range=[a,b] จำกัดผู้สมัครไว้ในช่วงเลขนั้นก่อน (แม่นกว่า) */
-    matchName(name, range) {
-      const nk = norm_(name);
+    /** ใช้ช่วงจากชื่อไฟล์เป็นข้อจำกัด และไม่เลือกแถวแรกเมื่อผลจับคู่ใกล้เคียงกัน */
+    matchItem(it, range) {
+      const nk = norm_(it.name);
       if (!nk) return null;
       let pool = rows;
       if (range && range[0] != null) {
-        const inRange = rows.filter(e => e.number >= range[0] && e.number <= range[1]);
-        if (inRange.length) pool = inRange;
+        pool = rows.filter(e => e.number >= range[0] && e.number <= range[1]);
       }
-      // 1) ชื่อตรงเป๊ะ (หลัง normalize)
-      const exact = pool.filter(e => e.nkey === nk);
-      if (exact.length) return exact[0];
-      // 2) ความคล้ายสูงสุด (ไทยไม่เว้นวรรค → ใช้ substring + bigram similarity)
-      let best = null, bestScore = 0;
-      for (const e of pool) {
-        const s = simNorm_(name, e.name);
-        if (s > bestScore) { bestScore = s; best = e; }
-      }
-      // pool ถูกจำกัดด้วยช่วงเลขแล้วจึงยอมรับได้ตั้งแต่ 0.45; ถ้าเทียบทั้งบัญชีต้อง 0.6 ขึ้นไป
-      const threshold = (pool !== rows) ? 0.45 : 0.6;
-      return (best && bestScore >= threshold) ? best : null;
+      const minNameScore = range && range[0] != null ? 0.75 : 0.95;
+      const candidates = pool.map(e => {
+        const nameScore = simNorm_(it.name, e.name);
+        let score = nameScore;
+        if (Number(it.number) === e.number) score += 0.18;
+        if (it.project && e.project && norm_(it.project) === norm_(e.project)) score += 0.12;
+        if (it.owner_unit && e.unit && norm_(it.owner_unit) === norm_(e.unit)) score += 0.08;
+        return { row: e, nameScore, score };
+      }).filter(c => c.nameScore >= minNameScore).sort((a, b) => b.score - a.score);
+      if (!candidates.length) return null;
+      if (candidates[1] && candidates[0].score - candidates[1].score < 0.08) return null;
+      return candidates[0].row;
     }
   };
 }
@@ -268,15 +321,20 @@ function readControlSheet_() {
 
   // จับคู่ชื่อโครงการ (+ โบนัสหน่วยตรง) กับแถวในบัญชีคุม
   const matchStr = (projectStr, unitStr) => {
-    const q = String(projectStr || '').split(/\s+/).filter(x => x.length > 1);
+    const q = String(projectStr || '').toLowerCase().split(/\s+/).filter(Boolean);
+    const qp = norm_(projectStr);
+    if (!qp) return {};
     const qu = norm_(unitStr || '');
     let best = null, bestScore = 0;
     for (const rec of recs) {
-      const projTokens = new Set(String(rec.project).split(/\s+/).filter(x => x.length > 1));
+      const projTokens = new Set(String(rec.project).toLowerCase().split(/\s+/).filter(Boolean));
       let hit = 0;
       q.forEach(t => { if (projTokens.has(t)) hit++; });
-      let s = q.length ? hit / q.length : 0;
-      if (qu && norm_(rec.unit).indexOf(qu) >= 0) s += 0.3; // โบนัสถ้าหน่วยตรง
+      const rp = norm_(rec.project);
+      let s = qp === rp ? 1 : (q.length ? hit / q.length : 0);
+      if (!s && qp.length >= 8 && rp.length >= 8 && (qp.indexOf(rp) >= 0 || rp.indexOf(qp) >= 0)) s = 0.8;
+      if (s < 0.75) continue; // หน่วยตรงหรือคำทั่วไปคำเดียวไม่พอจะยืนยันโครงการ
+      if (qu && norm_(rec.unit).indexOf(qu) >= 0) s += 0.15;
       if (s > bestScore) { bestScore = s; best = rec; }
     }
     if (best && bestScore >= 0.25) {
